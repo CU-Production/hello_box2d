@@ -1,0 +1,2 @@
+add_executable(hello_box2d_draw main.cpp)
+target_link_libraries(hello_box2d_draw PRIVATE box2d sokol)
