@@ -128,7 +128,12 @@ static void frame(void) {
         sgp_translate(position.x, position.y);
         sgp_rotate(angle);
         sgp_set_color(1.0f, 0.0f, 0.0f, 1.0f);
-        sgp_draw_filled_rect(-state.d_box[i].halfWidth, -state.d_box[i].halfHeight, state.d_box[i].halfWidth*2, state.d_box[i].halfHeight*2);
+        // sgp_draw_filled_rect(-state.d_box[i].halfWidth, -state.d_box[i].halfHeight, state.d_box[i].halfWidth*2, state.d_box[i].halfHeight*2);
+        sgp_draw_line(-state.d_box[i].halfWidth, -state.d_box[i].halfHeight, state.d_box[i].halfWidth, -state.d_box[i].halfHeight);
+        sgp_draw_line(-state.d_box[i].halfWidth, -state.d_box[i].halfHeight, -state.d_box[i].halfWidth, state.d_box[i].halfHeight);
+        sgp_draw_line(state.d_box[i].halfWidth, -state.d_box[i].halfHeight, state.d_box[i].halfWidth, state.d_box[i].halfHeight);
+        sgp_draw_line(-state.d_box[i].halfWidth, state.d_box[i].halfHeight, state.d_box[i].halfWidth, state.d_box[i].halfHeight);
+        sgp_draw_line(0, 0, state.d_box[i].halfWidth, 0);
         sgp_pop_transform();
     }
 
