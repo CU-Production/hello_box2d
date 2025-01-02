@@ -7,3 +7,4 @@ add_subdirectory(3rd_party)
 
 add_subdirectory(src/hellobox2d)
 add_subdirectory(src/hellobox2d_draw)
+add_subdirectory(src/hellobox2d_draw_mt)

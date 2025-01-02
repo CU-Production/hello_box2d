@@ -1,0 +1,2 @@
+add_executable(hello_box2d_draw_mt main.cpp)
+target_link_libraries(hello_box2d_draw_mt PRIVATE box2d sokol enkiTS)

@@ -8,3 +8,11 @@ add_subdirectory(box2d)
 # sokol
 add_library(sokol INTERFACE)
 target_include_directories(sokol INTERFACE sokol)
+
+#enkiTS
+add_library(enkiTS STATIC
+    enkiTS/TaskScheduler.cpp
+    enkiTS/TaskScheduler_c.cpp
+)
+target_include_directories(enkiTS PUBLIC enkiTS)
+
