@@ -47,4 +47,6 @@ int main() {
         b2Rot angle = b2Body_GetRotation(bodyId);
         printf("%4.2f %4.2f %4.2f\n", position.x, position.y, b2Rot_GetAngle(angle));
     }
+
+    b2DestroyWorld(worldId);
 }
