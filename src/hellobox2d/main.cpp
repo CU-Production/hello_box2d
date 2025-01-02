@@ -3,6 +3,8 @@
 #include <iostream>
 
 int main() {
+    std::cout << "Using box2d v" << b2_version.major << "." << b2_version.minor << "." << b2_version.revision << std::endl;
+
     // world
     b2Vec2 gravity(0.0f, -10.0f);
 
