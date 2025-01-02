@@ -18,21 +18,20 @@
 static struct {
     struct {
         b2Vec2 gravity = {0.0f, -5.0f};
-        b2World world{gravity};
+        b2WorldId worldId = b2_nullWorldId;
         float timeStep = 1.0f / 60.0f;
-        int32 velocityIterations = 6;
-        int32 positionIterations = 2;
+        int32_t subStepCount = 4;
     } b2d_global_ctx;
     struct {
-        b2Body* body = nullptr;
-        b2PolygonShape shape;
+        b2BodyId bodyId = b2_nullBodyId;
+        b2Polygon shape;
         const float halfWidth = 50.0f;
         const float halfHeight = 5.0f;
     } s_ground;
-    const static int32 dynamicBoxCount = 100;
+    const static int32_t dynamicBoxCount = 100;
     struct {
-        b2Body* body = nullptr;
-        b2PolygonShape shape;
+        b2BodyId bodyId = b2_nullBodyId;
+        b2Polygon shape;
         const float halfWidth = 1.0f;
         const float halfHeight = 1.0f;
     } d_box[dynamicBoxCount];
@@ -56,39 +55,44 @@ static void init(void) {
         exit(-1);
     }
 
+    // world
+    b2WorldDef worldDef = b2DefaultWorldDef();
+    worldDef.gravity = state.b2d_global_ctx.gravity;
+
+    state.b2d_global_ctx.worldId = b2CreateWorld(&worldDef);
+
     // ground
-    b2BodyDef groundBodyDef;
+    b2BodyDef groundBodyDef = b2DefaultBodyDef();
     groundBodyDef.position = {0.0f, -10.f};
 
-    state.s_ground.body = state.b2d_global_ctx.world.CreateBody(&groundBodyDef);
+    state.s_ground.bodyId = b2CreateBody(state.b2d_global_ctx.worldId, &groundBodyDef);
 
-    b2PolygonShape groundBox;
-    groundBox.SetAsBox(state.s_ground.halfWidth, state.s_ground.halfHeight);
+    state.s_ground.shape = b2MakeBox(state.s_ground.halfWidth, state.s_ground.halfHeight);
 
-    state.s_ground.body->CreateFixture(&groundBox, 0.0f);
+    b2ShapeDef groundShapeDef = b2DefaultShapeDef();
+    b2CreatePolygonShape(state.s_ground.bodyId, &groundShapeDef, &state.s_ground.shape);
 
     // dynamic body
-    for (int32 i = 0; i < state.dynamicBoxCount; i++) {
-        b2BodyDef bodyDef;
+    for (int32_t i = 0; i < state.dynamicBoxCount; i++) {
+        b2BodyDef bodyDef = b2DefaultBodyDef();
         bodyDef.type = b2_dynamicBody;
         bodyDef.position = {0.0f + (fmodf((float)i, 2.0f)), 4.0f + 6.0f * i};
 
-        state.d_box[i].body = state.b2d_global_ctx.world.CreateBody(&bodyDef);
+        state.d_box[i].bodyId = b2CreateBody(state.b2d_global_ctx.worldId, &bodyDef);
 
-        b2PolygonShape dynamicBox;
-        dynamicBox.SetAsBox(state.d_box[i].halfWidth, state.d_box[i].halfHeight);
+        state.d_box[i].shape = b2MakeBox(state.d_box[i].halfWidth, state.d_box[i].halfHeight);
 
-        b2FixtureDef fixtureDef;
-        fixtureDef.shape = &dynamicBox;
-        fixtureDef.density = 1.0f;
-        fixtureDef.friction = 0.3f;
-        fixtureDef.restitution = 0.5f;
+        b2ShapeDef shapeDef = b2DefaultShapeDef();
+        shapeDef.density = 1.0f;
+        shapeDef.friction = 0.3f;
+        shapeDef.restitution = 0.5f;
 
-        state.d_box[i].body->CreateFixture(&fixtureDef);
+        b2CreatePolygonShape(state.d_box[i].bodyId, &shapeDef, &state.d_box[i].shape);
     }
 }
 
 static void cleanup(void) {
+    b2DestroyWorld(state.b2d_global_ctx.worldId);
     sgp_shutdown();
     sg_shutdown();
 }
@@ -106,12 +110,12 @@ static void frame(void) {
     sgp_set_color(0.1f, 0.1f, 0.1f, 1.0f);
     sgp_clear();
 
-    state.b2d_global_ctx.timeStep = sapp_frame_duration();
-    state.b2d_global_ctx.world.Step(state.b2d_global_ctx.timeStep, state.b2d_global_ctx.velocityIterations, state.b2d_global_ctx.positionIterations);
+    state.b2d_global_ctx.timeStep = static_cast<float>(sapp_frame_duration());
+    b2World_Step(state.b2d_global_ctx.worldId, state.b2d_global_ctx.timeStep, state.b2d_global_ctx.subStepCount);
 
     // draw ground
     {
-        b2Vec2 position = state.s_ground.body->GetPosition();
+        b2Vec2 position = b2Body_GetPosition(state.s_ground.bodyId);
         sgp_push_transform();
         sgp_set_color(1.0f, 1.0f, 1.0f, 1.0f);
         sgp_translate(position.x, position.y);
@@ -120,10 +124,10 @@ static void frame(void) {
     }
 
     // draw dynamic box
-    for (int32 i = 0; i < state.dynamicBoxCount; i++)
+    for (int32_t i = 0; i < state.dynamicBoxCount; i++)
     {
-        b2Vec2 position = state.d_box[i].body->GetPosition();
-        float angle = state.d_box[i].body->GetAngle();
+        b2Vec2 position = b2Body_GetPosition(state.d_box[i].bodyId);
+        float angle = b2Rot_GetAngle(b2Body_GetRotation(state.d_box[i].bodyId));
         sgp_push_transform();
         sgp_translate(position.x, position.y);
         sgp_rotate(angle);
