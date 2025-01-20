@@ -53,14 +53,14 @@ struct color_t {
 };
 
 color_t colors[] = {
-	{1.0f, 0.0f, 0.0f},
-	{0.0f, 1.0f, 0.0f},
-	{0.0f, 0.0f, 1.0f},
-	{1.0f, 0.0f, 1.0f},
-	{1.0f, 1.0f, 0.0f},
-	{0.0f, 1.0f, 1.0f},
-	{1.0f, 1.0f, 1.0f},
-	{0.5f, 0.5f, 1.0f},
+	{0.8f, 0.0f, 0.0f},
+	{0.0f, 0.8f, 0.0f},
+	{0.0f, 0.0f, 0.8f},
+	{0.8f, 0.0f, 0.8f},
+	{0.8f, 0.8f, 0.0f},
+	{0.0f, 0.8f, 0.8f},
+	{0.6f, 0.8f, 0.6f},
+	{0.5f, 0.5f, 0.8f},
 	{0.0f, 0.5f, 0.5f},
 	{0.5f, 0.0f, 0.5f},
 	{0.5f, 0.5f, 0.5f},
@@ -697,25 +697,50 @@ static void frame(void) {
 			Bone& bone = state.d_human.bones[boneIdx];
 			int bodyCount = b2Body_GetShapeCount(bone.bodyId);
 			//assert(bodyCount == 1);
+
 			std::vector<b2ShapeId> shapeIds(bodyCount);
 			b2Body_GetShapes(bone.bodyId, shapeIds.data(), bodyCount);
-			b2Capsule capsule = b2Shape_GetCapsule(shapeIds[bodyCount-1]);
 
-			b2Vec2 position = b2Body_GetPosition(bone.bodyId);
-			float angle = b2Rot_GetAngle(b2Body_GetRotation(bone.bodyId));
-			sgp_push_transform();
-			sgp_translate(position.x, position.y);
-			sgp_rotate(angle);
-			// sgp_set_color(0.0f, 1.0f, 1.0f, 1.0f);
-			sgp_set_color(colors[boneIdx].r, colors[boneIdx].g, colors[boneIdx].b, 1.0f);
-			float dx = fabsf(capsule.center1.x - capsule.center2.x);
-			float dy = fabsf(capsule.center1.y - capsule.center2.y);
-			float h = fmaxf(dx, dy);
-			float w = 2.0f * capsule.radius;
-			sgp_draw_filled_rect(-0.5f * w, -0.5f * h, w, h);
-			sgp_draw_filled_circle(capsule.center1.x, capsule.center1.y, capsule.radius);
-			sgp_draw_filled_circle(capsule.center2.x, capsule.center2.y, capsule.radius);
-			sgp_pop_transform();
+			// draw joints
+			{
+				b2Capsule capsule = b2Shape_GetCapsule(shapeIds[bodyCount-1]);
+				b2Vec2 position = b2Body_GetPosition(bone.bodyId);
+				float angle = b2Rot_GetAngle(b2Body_GetRotation(bone.bodyId));
+
+				sgp_push_transform();
+				sgp_translate(position.x, position.y);
+				sgp_rotate(angle);
+				sgp_set_color(colors[boneIdx].r, colors[boneIdx].g, colors[boneIdx].b, 1.0f);
+				float dx = fabsf(capsule.center1.x - capsule.center2.x);
+				float dy = fabsf(capsule.center1.y - capsule.center2.y);
+				float h = fmaxf(dx, dy);
+				float w = 2.0f * capsule.radius;
+				sgp_draw_filled_rect(-0.5f * w, -0.5f * h, w, h);
+				sgp_draw_filled_circle(capsule.center1.x, capsule.center1.y, capsule.radius);
+				sgp_draw_filled_circle(capsule.center2.x, capsule.center2.y, capsule.radius);
+				sgp_pop_transform();
+			}
+
+			// draw foot
+			if (bodyCount > 1)
+			{
+				b2Polygon foot = b2Shape_GetPolygon(shapeIds[0]);
+				b2Vec2 position = b2Body_GetPosition(bone.bodyId);
+				float angle = b2Rot_GetAngle(b2Body_GetRotation(bone.bodyId));
+
+				sgp_push_transform();
+				sgp_translate(position.x, position.y);
+				sgp_rotate(angle);
+				sgp_set_color(colors[boneIdx].r, colors[boneIdx].g, colors[boneIdx].b, 1.0f);
+				std::vector<sgp_point> vertices(foot.count);
+				for	(int32_t i = 0; i < foot.count; ++i)
+				{
+					vertices[i].x = foot.vertices[i].x;
+					vertices[i].y = foot.vertices[i].y;
+				}
+				sgp_draw_lines_strip(vertices.data(), vertices.size());
+				sgp_pop_transform();
+			}
 		}
     }
 
