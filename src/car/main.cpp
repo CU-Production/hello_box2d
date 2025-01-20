@@ -16,6 +16,7 @@
 #define DEGTORAD 0.0174532925199432957f
 #define RADTODEG 57.295779513082320876f
 
+const float halfDemoHeight = 30.0f;
 static const int num_segments = 60;
 
 void sgp_draw_outline_circle(float cx, float cy, float radius) {
@@ -45,12 +46,35 @@ void sgp_draw_filled_circle(float cx, float cy, float radius) {
     }
 }
 
+b2Vec2 worldPosToScreenPos(float x, float y) {
+    float swidth = (float)sapp_width(), sheight = (float)sapp_height();
+    float ratio = swidth/sheight;
+    const float halfDemoWidth = halfDemoHeight * ratio;
+
+    float cwheight = (y / halfDemoHeight - 1.0f) * -0.5f * sheight;
+    float cwwidth = (x / halfDemoWidth + 1.0f) * 0.5f * swidth;
+
+    return {cwwidth, cwheight};
+}
+b2Vec2 screenPosToWorldPos(float x, float y) {
+    int swidth = sapp_width(), sheight = sapp_height();
+    float ratio = swidth/(float)sheight;
+    const float halfDemoWidth = halfDemoHeight * ratio;
+
+    float csheight = ((y / sheight * -2.0f) + 1.0f) * halfDemoHeight;
+    float cswidth = ((x / swidth * 2.0f) - 1.0f) * halfDemoWidth;
+
+    return {cswidth, csheight};
+}
+
 static struct {
     struct {
         b2Vec2 gravity = {0.0f, -5.0f};
         b2WorldId worldId = b2_nullWorldId;
         float timeStep = 1.0f / 60.0f;
         int32_t subStepCount = 4;
+        b2JointId mouseJointId = b2_nullJointId;
+        b2BodyId mouseBodyId = b2_nullBodyId; // virtual groundBodyId to generate mouse joint for debug
     } b2d_global_ctx;
     struct {
         b2BodyId bodyId = b2_nullBodyId;
@@ -180,6 +204,32 @@ static void cleanup(void) {
     sg_shutdown();
 }
 
+struct QueryContext
+{
+    b2Vec2 point;
+    b2BodyId bodyId = b2_nullBodyId;
+};
+
+bool QueryCallback(b2ShapeId shapeId, void* context) {
+    QueryContext* queryContext = (QueryContext*)context;
+
+    b2BodyId bodyId = b2Shape_GetBody(shapeId);
+    b2BodyType bodyType = b2Body_GetType(bodyId);
+    if (bodyType != b2_dynamicBody) {
+        // continue query
+        return true;
+    }
+
+    bool overlap = b2Shape_TestPoint(shapeId, queryContext->point);
+    if (overlap) {
+        // found shape
+        queryContext->bodyId = bodyId;
+        return false;
+    }
+
+    return true;
+}
+
 void input(const sapp_event* event) {
     switch (event->type) {
         case SAPP_EVENTTYPE_KEY_DOWN: {
@@ -209,6 +259,73 @@ void input(const sapp_event* event) {
             }
             break;
         }
+        case SAPP_EVENTTYPE_MOUSE_DOWN: {
+            if (B2_IS_NON_NULL(state.b2d_global_ctx.mouseJointId)) { return; }
+
+            if (event->mouse_button == SAPP_MOUSEBUTTON_LEFT) {
+                b2Vec2 p = screenPosToWorldPos(event->mouse_x, event->mouse_y);
+
+                // Make a small box.
+                b2AABB box;
+                b2Vec2 d = { 0.001f, 0.001f };
+                box.lowerBound = b2Sub( p, d );
+                box.upperBound = b2Add( p, d );
+
+                // Query the world for overlapping shapes.
+                QueryContext queryContext = {p, b2_nullBodyId};
+                b2World_OverlapAABB(state.b2d_global_ctx.worldId, box, b2DefaultQueryFilter(), QueryCallback, &queryContext);
+
+                if (B2_IS_NON_NULL(queryContext.bodyId)) {
+                    b2BodyDef bodyDef = b2DefaultBodyDef();
+                    state.b2d_global_ctx.mouseBodyId = b2CreateBody(state.b2d_global_ctx.worldId, &bodyDef);
+
+                    b2MouseJointDef mouseJointDef = b2DefaultMouseJointDef();
+                    mouseJointDef.bodyIdA = state.b2d_global_ctx.mouseBodyId;
+                    mouseJointDef.bodyIdB = queryContext.bodyId;
+                    mouseJointDef.target = p;
+                    mouseJointDef.hertz = 5.0f;
+                    mouseJointDef.dampingRatio = 0.7f;
+                    mouseJointDef.maxForce = 1000.0f * b2Body_GetMass(queryContext.bodyId);
+                    state.b2d_global_ctx.mouseJointId = b2CreateMouseJoint(state.b2d_global_ctx.worldId, &mouseJointDef);
+
+                    b2Body_SetAwake(queryContext.bodyId, true);
+                }
+            }
+
+            break;
+        }
+        case SAPP_EVENTTYPE_MOUSE_MOVE: {
+            if (b2Joint_IsValid(state.b2d_global_ctx.mouseJointId) == false) {
+                // The world or attached body was destroyed.
+                state.b2d_global_ctx.mouseJointId = b2_nullJointId;
+            }
+
+            if (B2_IS_NON_NULL(state.b2d_global_ctx.mouseBodyId)) {
+                b2Vec2 p = screenPosToWorldPos(event->mouse_x, event->mouse_y);
+
+                b2MouseJoint_SetTarget(state.b2d_global_ctx.mouseJointId, p);
+                b2BodyId bodyIdB = b2Joint_GetBodyB(state.b2d_global_ctx.mouseJointId);
+                b2Body_SetAwake(bodyIdB, true);
+            }
+
+            break;
+        }
+        case SAPP_EVENTTYPE_MOUSE_UP: {
+            if (b2Joint_IsValid(state.b2d_global_ctx.mouseJointId) == false) {
+                // The world or attached body was destroyed.
+                state.b2d_global_ctx.mouseJointId = b2_nullJointId;
+            }
+
+            if (B2_IS_NON_NULL(state.b2d_global_ctx.mouseBodyId) && event->mouse_button == SAPP_MOUSEBUTTON_LEFT) {
+                b2DestroyJoint(state.b2d_global_ctx.mouseJointId);
+                state.b2d_global_ctx.mouseJointId = b2_nullJointId;
+
+                b2DestroyBody(state.b2d_global_ctx.mouseBodyId);
+                state.b2d_global_ctx.mouseBodyId = b2_nullBodyId;
+            }
+
+            break;
+        }
         default: break;
     }
 }
@@ -220,7 +337,6 @@ static void frame(void) {
     sgp_begin(width, height);
     sgp_viewport(0, 0, width, height);
 
-    const float halfDemoHeight = 30.0f;
     sgp_project(-ratio*halfDemoHeight, ratio*halfDemoHeight, halfDemoHeight, -halfDemoHeight);
 
     sgp_set_color(0.1f, 0.1f, 0.1f, 1.0f);
@@ -281,6 +397,18 @@ static void frame(void) {
             sgp_draw_line(0, 0, 1.0f, 0);
             sgp_pop_transform();
         }
+    }
+
+    // draw mouseJoint
+    if (B2_IS_NON_NULL(state.b2d_global_ctx.mouseJointId)) {
+        b2BodyId bodyIdB = b2Joint_GetBodyB(state.b2d_global_ctx.mouseJointId);
+        b2Vec2 positionB = b2Body_GetPosition(bodyIdB);
+        b2Vec2 targetPos = b2MouseJoint_GetTarget(state.b2d_global_ctx.mouseJointId);
+        sgp_set_color(1.0f, 1.0f, 1.0f, 1.0f);
+        sgp_draw_line(targetPos.x, targetPos.y, positionB.x, positionB.y);
+        sgp_set_color(0.0f, 1.0f, 0.0f, 1.0f);
+        sgp_draw_outline_circle(targetPos.x, targetPos.y, 0.1f);
+        sgp_draw_outline_circle(positionB.x, positionB.y, 0.1f);
     }
 
     sg_pass_action pass_action = {0};
